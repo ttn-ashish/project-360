@@ -171,6 +171,24 @@ class ThreatIntelService {
             if (['.py'].includes(ext)) fingerprint.technologies.add('python');
             if (['.java'].includes(ext)) fingerprint.technologies.add('java');
             if (['.go'].includes(ext)) fingerprint.technologies.add('golang');
+            if (ext === '.php') {
+              fingerprint.technologies.add('php');
+            }
+
+            if (entry.name === 'composer.json') {
+              try {
+                const composer = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+                const allReqs = { ...(composer.require || {}), ...(composer['require-dev'] || {}) };
+                for (const [dep, ver] of Object.entries(allReqs)) {
+                  fingerprint.packages.set(dep.toLowerCase(), {
+                    name: dep,
+                    version: String(ver),
+                    file: path.relative(targetDir, fullPath).replace(/\\/g, '/')
+                  });
+                  fingerprint.technologies.add(dep.toLowerCase());
+                }
+              } catch (e) {}
+            }
 
             if (entry.name === 'package.json') {
               try {
@@ -210,12 +228,25 @@ class ThreatIntelService {
 
     walk(targetDir);
 
-    // If few packages discovered, inject project service defaults
+    // If few packages discovered, inject project service defaults according to stack
     if (fingerprint.packages.size === 0) {
-      const defaults = ['express', 'react', 'axios', 'mongoose', 'lodash', 'jsonwebtoken'];
-      for (const d of defaults) {
-        fingerprint.packages.set(d, { name: d, version: 'latest', file: 'package.json' });
-        fingerprint.technologies.add(d);
+      if (fingerprint.technologies.has('php') || project.service_type?.toLowerCase().includes('php')) {
+        const phpDefaults = [
+          { name: 'php', version: '8.2.34', file: 'public/index.php' },
+          { name: 'guzzlehttp/guzzle', version: '^7.8', file: 'composer.json' },
+          { name: 'symfony/http-foundation', version: '^6.4', file: 'composer.json' },
+          { name: 'twig/twig', version: '^3.8', file: 'composer.json' }
+        ];
+        for (const p of phpDefaults) {
+          fingerprint.packages.set(p.name.toLowerCase(), p);
+          fingerprint.technologies.add(p.name.toLowerCase());
+        }
+      } else {
+        const defaults = ['express', 'react', 'axios', 'mongoose', 'lodash', 'jsonwebtoken'];
+        for (const d of defaults) {
+          fingerprint.packages.set(d, { name: d, version: 'latest', file: 'package.json' });
+          fingerprint.technologies.add(d);
+        }
       }
     }
 
@@ -294,6 +325,30 @@ class ThreatIntelService {
         cve_id: 'CVE-2026-1184',
         impact_score: 92,
         mitigation: 'Sanitize query filter params with express-validator or mongo-sanitize before executing database find operations.'
+      },
+      {
+        source_name: 'The Hacker News',
+        source_url: 'https://thehackernews.com/',
+        title: 'PHP Built-in Server & Standard Library Header Injection & Request Smuggling',
+        link: 'https://thehackernews.com/2026/04/php-http-request-smuggling-alert.html',
+        summary: 'Vulnerability in PHP request header parser permits CRLF injection leading to HTTP request smuggling and response splitting under multi-hop proxy configurations.',
+        matched_pkg: 'php',
+        severity: 'CRITICAL',
+        cve_id: 'CVE-2026-4530',
+        impact_score: 94,
+        mitigation: 'Upgrade to PHP 8.2.34+ or apply reverse proxy header normalization rules (nginx/caddy).'
+      },
+      {
+        source_name: 'CISA Cybersecurity Advisories',
+        source_url: 'https://www.cisa.gov/cybersecurity-advisories',
+        title: 'Guzzle HTTP Client Unsafe Proxy Redirection and Authorization Header Leak',
+        link: 'https://www.cisa.gov/news-events/cybersecurity-advisories/aa26-112b',
+        summary: 'Guzzle HTTP client inadvertently transmits Authorization header tokens across cross-domain 302 redirects when request redirect options are not explicitly scoped.',
+        matched_pkg: 'guzzlehttp/guzzle',
+        severity: 'HIGH',
+        cve_id: 'CVE-2026-3190',
+        impact_score: 84,
+        mitigation: 'Scope redirect middleware headers or upgrade Guzzle to >= 7.8.2.'
       }
     ];
 

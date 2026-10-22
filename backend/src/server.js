@@ -8,6 +8,8 @@ const RiskRadarService = require('./services/riskRadarService');
 const ThreatIntelService = require('./services/threatIntelService');
 const GroundedAIService = require('./services/llmService');
 const CodebaseScanner = require('./services/codebaseScanner');
+const DeveloperOnboardingService = require('./services/developerOnboardingService');
+const DeadCodeScannerService = require('./services/deadCodeScanner');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -400,6 +402,138 @@ app.patch('/api/v1/threats/:id/status', (req, res) => {
     res.json({ status: 'success', item: updated });
   } catch (err) {
     console.error('Error updating threat status:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* --- Developer Onboarding Endpoints --- */
+// Get full onboarding dossier for a repository
+app.get('/api/v1/onboarding', (req, res) => {
+  try {
+    const { project_id } = req.query;
+    let repoId = null;
+
+    if (project_id && project_id !== 'all') {
+      const repo = db.prepare('SELECT id FROM repositories WHERE id = ? OR name = ?').get(project_id, project_id);
+      if (repo) repoId = repo.id;
+    }
+
+    if (!repoId) {
+      // Default to first repo if none or all selected
+      const firstRepo = db.prepare('SELECT id FROM repositories ORDER BY id ASC LIMIT 1').get();
+      if (!firstRepo) {
+        return res.json({ onboarding: null, message: 'No repositories found. Ingest or scan a repository first.' });
+      }
+      repoId = firstRepo.id;
+    }
+
+    const guide = DeveloperOnboardingService.getOnboardingGuide(db, repoId);
+    res.json({ status: 'success', onboarding: guide });
+  } catch (err) {
+    console.error('Error fetching developer onboarding guide:', err);
+    res.status(500).json({ error: 'Failed to fetch onboarding guide', detail: err.message });
+  }
+});
+
+// Update an onboarding task status (PENDING / COMPLETED)
+app.patch('/api/v1/onboarding/tasks/:id', (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!status) return res.status(400).json({ error: 'Status is required' });
+    const updated = DeveloperOnboardingService.updateTaskStatus(db, Number(req.params.id), status);
+    res.json({ status: 'success', task: updated });
+  } catch (err) {
+    console.error('Error updating onboarding task:', err);
+    res.status(500).json({ error: 'Failed to update task', detail: err.message });
+  }
+});
+
+// Reset onboarding checklist for a repository
+app.post('/api/v1/onboarding/reset', (req, res) => {
+  try {
+    const { project_id } = req.body;
+    let repoId = project_id;
+    if (!repoId) {
+      const firstRepo = db.prepare('SELECT id FROM repositories ORDER BY id ASC LIMIT 1').get();
+      if (firstRepo) repoId = firstRepo.id;
+    }
+    if (repoId) {
+      db.prepare('DELETE FROM developer_onboarding_tasks WHERE project_id = ?').run(repoId);
+      const guide = DeveloperOnboardingService.getOnboardingGuide(db, repoId);
+      return res.json({ status: 'success', onboarding: guide });
+    }
+    res.status(400).json({ error: 'No repository specified' });
+  } catch (err) {
+    console.error('Error resetting onboarding checklist:', err);
+    res.status(500).json({ error: 'Failed to reset onboarding checklist', detail: err.message });
+  }
+});
+
+/* --- Dead Code & Zombie Files Radar Endpoints --- */
+// Get dead code report
+app.get('/api/v1/dead-code', (req, res) => {
+  try {
+    const { project_id } = req.query;
+    let repoId = null;
+
+    if (project_id && project_id !== 'all') {
+      const repo = db.prepare('SELECT id FROM repositories WHERE id = ? OR name = ?').get(project_id, project_id);
+      if (repo) repoId = repo.id;
+    }
+
+    if (!repoId) {
+      const firstRepo = db.prepare('SELECT id FROM repositories ORDER BY id ASC LIMIT 1').get();
+      if (!firstRepo) {
+        return res.json({ report: null, message: 'No repositories found.' });
+      }
+      repoId = firstRepo.id;
+    }
+
+    const report = DeadCodeScannerService.getProjectDeadCodeReport(db, repoId);
+    res.json({ status: 'success', report });
+  } catch (err) {
+    console.error('Error fetching dead code report:', err);
+    res.status(500).json({ error: 'Failed to fetch dead code report', detail: err.message });
+  }
+});
+
+// Trigger deep dead code scan for a project
+app.post('/api/v1/dead-code/scan', (req, res) => {
+  try {
+    const { project_id } = req.body;
+    let repoId = null;
+
+    if (project_id && project_id !== 'all') {
+      const repo = db.prepare('SELECT id FROM repositories WHERE id = ? OR name = ?').get(project_id, project_id);
+      if (repo) repoId = repo.id;
+    }
+
+    if (!repoId) {
+      const firstRepo = db.prepare('SELECT id FROM repositories ORDER BY id ASC LIMIT 1').get();
+      if (firstRepo) repoId = firstRepo.id;
+    }
+
+    if (!repoId) {
+      return res.status(400).json({ error: 'No repository found to scan.' });
+    }
+
+    const report = DeadCodeScannerService.scanProjectDeadCode(db, repoId);
+    res.json({ status: 'success', message: 'Dead code scan completed.', report });
+  } catch (err) {
+    console.error('Error running dead code scan:', err);
+    res.status(500).json({ error: 'Failed to execute dead code scan', detail: err.message });
+  }
+});
+
+// Update dead code finding status (OPEN, IGNORED, CLEANED)
+app.patch('/api/v1/dead-code/:id/status', (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!status) return res.status(400).json({ error: 'Status is required' });
+    const updated = DeadCodeScannerService.updateFindingStatus(db, Number(req.params.id), status);
+    res.json({ status: 'success', item: updated });
+  } catch (err) {
+    console.error('Error updating dead code finding status:', err);
     res.status(500).json({ error: err.message });
   }
 });

@@ -3,16 +3,23 @@ import {
   ShieldAlert, ShieldCheck, AlertTriangle, CheckCircle2, XCircle,
   RefreshCw, TrendingUp, Sparkles, Filter, ChevronRight, Info,
   ExternalLink, Layers, ArrowUpRight, ArrowDownRight, Clock,
-  FileText, CheckSquare, Search, Award, Activity
+  FileText, CheckSquare, Search, Award, Activity, GitPullRequest, Shield, Bug
 } from 'lucide-react';
 
 const API_BASE = "http://127.0.0.1:8080/api/v1";
 
-export default function RiskRadarView({ selectedRepo, onSelectRepo }) {
+export default function RiskRadarView({
+  selectedRepo,
+  onSelectRepo,
+  pullRequests = [],
+  sonarProjects = [],
+  selectedPr = null,
+  onSelectPr = () => {}
+}) {
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview', 'findings', 'trends', 'actions'
+  const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview', 'findings', 'prs', 'sonar', 'actions', 'trends'
 
   // Category filter from cards
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -222,6 +229,20 @@ export default function RiskRadarView({ selectedRepo, onSelectRepo }) {
         >
           <ShieldAlert size={16} />
           <span>Risk Findings Table ({overview?.total_findings || 0})</span>
+        </button>
+        <button
+          className={`sub-tab-btn ${activeSubTab === 'prs' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('prs')}
+        >
+          <GitPullRequest size={16} />
+          <span>PR Risk Ledger ({pullRequests.length})</span>
+        </button>
+        <button
+          className={`sub-tab-btn ${activeSubTab === 'sonar' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('sonar')}
+        >
+          <Shield size={16} />
+          <span>Quality Gates ({sonarProjects.length})</span>
         </button>
         <button
           className={`sub-tab-btn ${activeSubTab === 'actions' ? 'active' : ''}`}
@@ -764,6 +785,226 @@ export default function RiskRadarView({ selectedRepo, onSelectRepo }) {
               <span style={{ color: 'var(--text-muted)' }}>Health Score (0-100)</span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* SUB-VIEW: PULL REQUEST RISK LEDGER */}
+      {activeSubTab === 'prs' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.3fr', gap: '22px' }}>
+          {/* PR Table / List */}
+          <div className="glass-panel" style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <GitPullRequest size={17} color="var(--primary)" />
+                <span>Evaluated Pull Requests</span>
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                Showing {pullRequests.length} PRs
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {pullRequests.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 10px', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+                  No pull requests found for {selectedRepo}.
+                </div>
+              ) : (
+                pullRequests.map((pr) => {
+                  const isSelected = selectedPr && selectedPr.pr_number === pr.pr_number;
+                  return (
+                    <div
+                      key={pr.id}
+                      onClick={() => onSelectPr(pr.id)}
+                      style={{
+                        background: isSelected ? 'var(--bg-surface-elevated)' : 'rgba(255, 255, 255, 0.02)',
+                        border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
+                        padding: '16px',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--cyan)', fontWeight: 600 }}>
+                            PR #{pr.pr_number}
+                          </span>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>on {pr.repository}</span>
+                        </div>
+                        <span className={`badge badge-${pr.risk_level.toLowerCase()}`}>
+                          {pr.risk_level} RISK
+                        </span>
+                      </div>
+
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '8px', color: 'var(--text-main)' }}>
+                        {pr.title}
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', color: 'var(--text-dim)' }}>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <span>Linked Jira:</span>
+                          {pr.linked_jira_keys && pr.linked_jira_keys.length > 0 ? (
+                            pr.linked_jira_keys.map(k => (
+                              <span key={k} style={{
+                                background: 'rgba(99, 102, 241, 0.15)',
+                                color: '#a5b4fc',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontFamily: 'var(--font-mono)',
+                                fontWeight: 600
+                              }}>
+                                {k}
+                              </span>
+                            ))
+                          ) : (
+                            <span style={{ color: 'var(--danger)' }}>None (Orphaned)</span>
+                          )}
+                        </div>
+                        <div>
+                          +{pr.additions} / -{pr.deletions} lines
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Granular PR Detail & Auditable Evidence */}
+          <div className="glass-panel" style={{ padding: '22px' }}>
+            {selectedPr ? (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '16px', marginBottom: '20px' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.95rem', color: 'var(--cyan)', fontWeight: 700 }}>
+                        PR #{selectedPr.pr_number}
+                      </span>
+                      <span className={`badge badge-${selectedPr.assessment.risk_level.toLowerCase()}`}>
+                        {selectedPr.assessment.risk_level} RISK ({selectedPr.assessment.risk_score}/100)
+                      </span>
+                    </div>
+                    <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>{selectedPr.title}</h2>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+                      Repository: <strong>{selectedPr.repository}</strong> • Author: {selectedPr.author}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Executive Verdict Box */}
+                <div style={{
+                  background: selectedPr.assessment.risk_level === 'CRITICAL' ? 'rgba(244, 63, 94, 0.08)' : 'rgba(99, 102, 241, 0.08)',
+                  borderLeft: `4px solid ${selectedPr.assessment.risk_level === 'CRITICAL' ? 'var(--danger)' : 'var(--primary)'}`,
+                  padding: '14px 16px',
+                  borderRadius: '6px',
+                  marginBottom: '20px'
+                }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.82rem', textTransform: 'uppercase', color: selectedPr.assessment.risk_level === 'CRITICAL' ? 'var(--danger)' : 'var(--primary)', marginBottom: '4px' }}>
+                    Executive Risk Verdict
+                  </div>
+                  <div style={{ fontSize: '0.85rem', lineHeight: '1.5', color: 'var(--text-main)' }}>
+                    {selectedPr.assessment.executive_summary}
+                  </div>
+                </div>
+
+                {/* Auditable Evidence Ledger */}
+                <h4 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', marginBottom: '12px' }}>
+                  Traceable Evidence & Citations
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '22px' }}>
+                  {selectedPr.assessment.evidence.map((ev, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: '8px',
+                        padding: '12px 14px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--cyan)' }}>
+                          [{ev.category}]
+                        </span>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                          Source: {ev.source}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                        {ev.detail}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Recommended Actions */}
+                <h4 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', marginBottom: '12px' }}>
+                  Required Remediation Before Merge
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {selectedPr.assessment.recommended_actions.map((act, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.85rem' }}>
+                      <CheckSquare size={16} color="var(--primary)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                      <span>{act}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-dim)' }}>
+                Select a Pull Request to view its causal risk decomposition.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SUB-VIEW: SONARQUBE QUALITY GATES */}
+      {activeSubTab === 'sonar' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+          {sonarProjects.length === 0 ? (
+            <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px 20px', color: 'var(--text-dim)' }}>
+              No SonarQube analyses found for {selectedRepo}.
+            </div>
+          ) : (
+            sonarProjects.map((s, idx) => (
+              <div key={idx} className="glass-panel" style={{ padding: '22px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{s.project_key}</h3>
+                  <span className={`badge ${s.gate_status === 'PASSED' ? 'badge-low' : 'badge-critical'}`}>
+                    {s.gate_status}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Test Coverage</div>
+                    <div style={{ fontSize: '1.3rem', fontWeight: 700, color: s.coverage_pct >= 80 ? 'var(--success)' : 'var(--warning)' }}>
+                      {s.coverage_pct}%
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: s.coverage_delta_pct < 0 ? 'var(--danger)' : 'var(--success)' }}>
+                      {s.coverage_delta_pct > 0 ? `+${s.coverage_delta_pct}%` : `${s.coverage_delta_pct}%`} vs main
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Security Hotspots</div>
+                    <div style={{ fontSize: '1.3rem', fontWeight: 700, color: s.vulnerabilities > 0 ? 'var(--danger)' : 'var(--text-main)' }}>
+                      {s.vulnerabilities}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                      {s.bugs} bugs detected
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Code Smells: <strong>{s.code_smells}</strong>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       )}
 

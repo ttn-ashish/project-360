@@ -7,7 +7,7 @@ import {
 
 const API_BASE = "http://127.0.0.1:8080/api/v1";
 
-export default function CyberThreatRadarView({ selectedRepo }) {
+export default function CyberThreatRadarView({ selectedRepo, onSelectRepo }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -19,7 +19,7 @@ export default function CyberThreatRadarView({ selectedRepo }) {
   // Scanning simulation steps
   const SCAN_STEPS = [
     { title: 'CONNECTING THREAT SATELLITE', detail: 'Handshaking with The Hacker News, CISA, and CVE Feed real-time telemetry...' },
-    { title: 'EXTRACTION & FINGERPRINTING', detail: 'Mapping dependencies, frameworks (Express, React, Mongoose), and AST routes...' },
+    { title: 'EXTRACTION & FINGERPRINTING', detail: 'Mapping dependencies, frameworks (PHP, Express, React, Mongoose), and AST routes...' },
     { title: 'CVE ZERO-DAY CORRELATION', detail: 'Running heuristic deep-match for active remote exploits against project files...' },
     { title: 'SYNTHESIZING REMEDIATION', detail: 'Calculating DEFCON threat index and generating defense mitigations...' }
   ];
@@ -121,20 +121,46 @@ export default function CyberThreatRadarView({ selectedRepo }) {
           </div>
         </div>
 
-        <button
-          className="btn-primary"
-          onClick={handleStartScan}
-          disabled={scanning}
-          style={{
-            background: 'linear-gradient(135deg, #06b6d4 0%, #4f46e5 100%)',
-            boxShadow: '0 0 20px rgba(6, 182, 212, 0.4)',
-            padding: '10px 22px',
-            fontSize: '0.9rem'
-          }}
-        >
-          <Zap size={17} className={scanning ? 'spin' : ''} />
-          <span>{scanning ? 'SCANNING THREAT HORIZON...' : 'SCAN FOR ZERO-DAY THREATS'}</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {data?.repositories && onSelectRepo && (
+            <select
+              value={selectedRepo || ''}
+              onChange={(e) => onSelectRepo(e.target.value)}
+              style={{
+                background: 'rgba(15, 23, 42, 0.8)',
+                border: '1px solid rgba(6, 182, 212, 0.4)',
+                color: '#fff',
+                padding: '9px 14px',
+                borderRadius: '8px',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                outline: 'none',
+                boxShadow: '0 0 10px rgba(6, 182, 212, 0.15)'
+              }}
+            >
+              {data.repositories.map(r => (
+                <option key={r.id} value={r.name}>
+                  {r.name} ({r.service_type || 'Service'})
+                </option>
+              ))}
+            </select>
+          )}
+
+          <button
+            className="btn-primary"
+            onClick={handleStartScan}
+            disabled={scanning}
+            style={{
+              background: 'linear-gradient(135deg, #06b6d4 0%, #4f46e5 100%)',
+              boxShadow: '0 0 20px rgba(6, 182, 212, 0.4)',
+              padding: '10px 22px',
+              fontSize: '0.9rem'
+            }}
+          >
+            <Zap size={17} className={scanning ? 'spin' : ''} />
+            <span>{scanning ? 'SCANNING THREAT HORIZON...' : 'SCAN FOR ZERO-DAY THREATS'}</span>
+          </button>
+        </div>
       </div>
 
       {/* 2. FUTURISTIC SCANNING HUD MODAL / OVERLAY */}

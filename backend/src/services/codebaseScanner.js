@@ -79,9 +79,17 @@ class CodebaseScanner {
           if (['.js', '.jsx', '.ts', '.tsx'].includes(ext)) languages.add('JavaScript/TypeScript');
           else if (ext === '.py') languages.add('Python');
           else if (['.java', '.kt'].includes(ext)) languages.add('Java');
+          else if (ext === '.php') {
+            languages.add('PHP');
+            if (detectedFramework === 'Node.js') detectedFramework = 'PHP';
+          }
 
           if (entry.name.toLowerCase().includes('test') || entry.name.toLowerCase().includes('spec')) {
             testFiles++;
+          }
+
+          if (entry.name === 'composer.json') {
+            detectedFramework = 'PHP / Composer';
           }
 
           if (entry.name === 'package.json') {
@@ -94,11 +102,15 @@ class CodebaseScanner {
             } catch (err) {}
           }
 
-          if (['.js', '.ts', '.py'].includes(ext) && totalFiles < 200) {
+          if (['.js', '.ts', '.py', '.php'].includes(ext) && totalFiles < 200) {
             try {
               const content = fs.readFileSync(fullPath, 'utf-8').slice(0, 10000);
-              const matches = content.matchAll(/(?:app|router)\.(get|post|put|delete)\(['"]([^'"]+)['"]/gi);
-              for (const m of matches) {
+              const jsMatches = content.matchAll(/(?:app|router)\.(get|post|put|delete)\(['"]([^'"]+)['"]/gi);
+              for (const m of jsMatches) {
+                detectedEndpoints.push(`${m[1].toUpperCase()} ${m[2]}`);
+              }
+              const phpMatches = content.matchAll(/\$router->(get|post|put|delete)\(['"]([^'"]+)['"]/gi);
+              for (const m of phpMatches) {
                 detectedEndpoints.push(`${m[1].toUpperCase()} ${m[2]}`);
               }
             } catch (err) {}

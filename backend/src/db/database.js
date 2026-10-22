@@ -197,6 +197,40 @@ function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(project_id, article_url, matched_keyword)
     );
+
+    /* --- Developer Onboarding Checklist & Progress --- */
+    CREATE TABLE IF NOT EXISTS developer_onboarding_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+      task_key TEXT NOT NULL,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      description TEXT NOT NULL,
+      code_snippet TEXT DEFAULT '',
+      file_path TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      sort_order INTEGER DEFAULT 0,
+      completed_at DATETIME,
+      UNIQUE(project_id, task_key)
+    );
+
+    /* --- Dead Code & Zombie Files Radar --- */
+    CREATE TABLE IF NOT EXISTS dead_code_findings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+      file_path TEXT NOT NULL,
+      item_type TEXT NOT NULL DEFAULT 'ZOMBIE_FILE', -- 'ZOMBIE_FILE', 'ORPHAN_MODULE', 'DEAD_ENDPOINT', 'UNUSED_EXPORT'
+      waste_lines INTEGER DEFAULT 0,
+      file_size_bytes INTEGER DEFAULT 0,
+      days_inactive INTEGER DEFAULT 0,
+      confidence TEXT NOT NULL DEFAULT 'HIGH', -- 'HIGH', 'MEDIUM', 'LOW'
+      reason TEXT NOT NULL,
+      snippet TEXT DEFAULT '',
+      remediation_command TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'OPEN', -- 'OPEN', 'IGNORED', 'CLEANED'
+      detected_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(project_id, file_path, item_type)
+    );
   `);
 }
 
