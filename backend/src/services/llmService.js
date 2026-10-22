@@ -1,14 +1,37 @@
 const axios = require('axios');
 
 class GroundedAIService {
-  static async answerQuestion(db, question) {
+  static async answerQuestion(db, question, selectedRepo = null) {
     const qLower = (question || '').toLowerCase();
 
-    // 1. Fetch digital twin context from SQLite
-    const repos = db.prepare('SELECT * FROM repositories').all();
-    const prs = db.prepare('SELECT * FROM pull_requests').all();
-    const sonarList = db.prepare('SELECT * FROM sonar_analyses').all();
-    const jiraList = db.prepare('SELECT * FROM jira_issues').all();
+    // 1. Identify active repository if specified
+    let targetRepo = null;
+    if (selectedRepo && selectedRepo !== 'all') {
+      targetRepo = db.prepare('SELECT * FROM repositories WHERE id = ? OR LOWER(name) = LOWER(?)').get(Number(selectedRepo) || -1, String(selectedRepo));
+    }
+
+    // 1. Fetch digital twin context from SQLite (scoped to target repo if selected)
+    let repos = [];
+    let prs = [];
+    let sonarList = [];
+    let jiraList = [];
+
+    if (targetRepo) {
+      repos = [targetRepo];
+      prs = db.prepare('SELECT * FROM pull_requests WHERE repo_id = ?').all(targetRepo.id);
+      sonarList = db.prepare('SELECT * FROM sonar_analyses WHERE repo_id = ?').all(targetRepo.id);
+      jiraList = db.prepare(`
+        SELECT DISTINCT j.* FROM jira_issues j
+        JOIN pr_jira_links l ON j.id = l.jira_id
+        JOIN pull_requests p ON l.pr_id = p.id
+        WHERE p.repo_id = ?
+      `).all(targetRepo.id);
+    } else {
+      repos = db.prepare('SELECT * FROM repositories').all();
+      prs = db.prepare('SELECT * FROM pull_requests').all();
+      sonarList = db.prepare('SELECT * FROM sonar_analyses').all();
+      jiraList = db.prepare('SELECT * FROM jira_issues').all();
+    }
 
     // Attach assessments and jira links
     const prDetails = prs.map(pr => {
@@ -18,7 +41,7 @@ class GroundedAIService {
         JOIN jira_issues j ON l.jira_id = j.id 
         WHERE l.pr_id = ?
       `).all(pr.id);
-      const repo = repos.find(r => r.id === pr.repo_id);
+      const repo = repos.find(r => r.id === pr.repo_id) || targetRepo;
 
       return {
         pr_number: pr.pr_number,
@@ -36,6 +59,7 @@ class GroundedAIService {
     });
 
     const contextData = {
+      active_project_filter: targetRepo ? targetRepo.name : 'all_repositories',
       project_overview: {
         total_repositories: repos.length,
         open_pull_requests: prs.length,
@@ -85,20 +109,23 @@ class GroundedAIService {
   static async queryGemini(apiKey, model, question, context) {
     const candidateModels = [
       model,
-      'gemini-3.5-flash-lite',
-      'gemini-3-flash-preview',
-      'gemini-flash-latest'
+      'gemini-flash-latest',
+      'gemini-3.7-flash',
+      'gemini-3.5-flash',
+      'gemini-3.1-flash-lite'
     ];
     const uniqueModels = [...new Set(candidateModels.filter(Boolean))];
 
+    const activeProject = context.active_project_filter || 'all';
     const systemInstruction = 
       "You are the AI Assistant for Project 360 (Software Project Intelligence Platform).\n" +
+      `CRITICAL RULE: The user is currently inspecting the project: '${activeProject}'. Answer EXCLUSIVELY and ONLY for '${activeProject}'. Do NOT reference or mix in data from other repositories.\n` +
       "Your answers must be CLEAR, CONCISE, and EASY TO READ at a glance.\n" +
       "Rules for formatting:\n" +
       "- Always use clean markdown bullet points with line breaks between items, never run-on single line paragraphs.\n" +
       "- Highlight key entities (e.g. **Ticket ID**, **PR #**, status, risk) clearly.\n" +
       "- Limit long explanations to 2-3 direct sentences, followed by clean bullet points.\n" +
-      "- Use ONLY verified facts from the provided project context.\n\n" +
+      "- Use ONLY verified facts from the provided project context for the active project.\n\n" +
       "You MUST respond ONLY with valid JSON in this exact structure:\n" +
       "{\n" +
       '  "headline": "SHORT CONCISE TITLE",\n' +
@@ -210,11 +237,12 @@ class GroundedAIService {
     }
 
     // Default overview answer
+    const repoLabel = repos.length === 1 ? `**${repos[0].name}**` : `**${repos.length} repositories**`;
     return {
-      headline: 'PROJECT 360 INTELLIGENCE OVERVIEW',
+      headline: repos.length === 1 ? `${repos[0].name.toUpperCase()} INTELLIGENCE OVERVIEW` : 'PROJECT 360 INTELLIGENCE OVERVIEW',
       confidence: 0.90,
-      answer: `Project 360 is currently monitoring **${repos.length} repositories** and **${prs.length} open pull requests**.\n\nAsk questions like:\n- *'Can we release today?'*\n- *'What are the risks for PR #4521?'*\n- *'Which Jira tickets are currently in review?'*`,
-      evidence: [{ type: 'System', claim: 'Digital twin synchronizing active repositories', source: 'Cortex Engine' }],
+      answer: `Currently analyzing ${repoLabel} with **${prs.length} open pull request(s)** and **${jiraList.length} linked Jira issue(s)**.\n\nAsk questions like:\n- *'Can we release today?'*\n- *'What are the risks for PR #${prs[0]?.pr_number || 101}?'*\n- *'Which Jira tickets are currently in review?'*`,
+      evidence: [{ type: 'System', claim: `Active project scope: ${repos[0]?.name || 'All'}`, source: 'Cortex Engine' }],
       recommended_actions: ['Explore PR Risk Radar or SonarQube quality gates.'],
       intent: 'general_overview'
     };

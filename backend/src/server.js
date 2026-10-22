@@ -204,12 +204,12 @@ app.get('/api/v1/prs/:id', (req, res) => {
 // 3. Ask Project 360 AI Chat
 app.post('/api/v1/chat', async (req, res) => {
   try {
-    const { question } = req.body;
+    const { question, project_id } = req.body;
     if (!question || !question.trim()) {
       return res.status(400).json({ error: 'Question is required' });
     }
 
-    const answer = await GroundedAIService.answerQuestion(db, question.trim());
+    const answer = await GroundedAIService.answerQuestion(db, question.trim(), project_id);
     res.json(answer);
   } catch (err) {
     console.error('Chat error:', err);

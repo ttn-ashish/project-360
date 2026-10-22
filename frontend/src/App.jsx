@@ -156,7 +156,7 @@ export default function App() {
       const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q })
+        body: JSON.stringify({ question: q, project_id: selectedRepo })
       });
       const responseJson = await res.json();
       setChatHistory(prev => [...prev, {
@@ -674,6 +674,27 @@ export default function App() {
               {/* VIEW 5: Ask Project 360 AI Chat */}
               {activeTab === 'chat' && (
                 <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 230px)' }}>
+                  {/* Context Indicator */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 600 }}>Active Project Context:</span>
+                      <span style={{
+                        background: 'rgba(56, 189, 248, 0.12)',
+                        border: '1px solid rgba(56, 189, 248, 0.35)',
+                        color: '#38bdf8',
+                        padding: '2px 10px',
+                        borderRadius: '12px',
+                        fontSize: '0.8rem',
+                        fontWeight: 700
+                      }}>
+                        {selectedRepo || 'None Selected'}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--text-dim)' }}>
+                      AI responses are scoped exclusively to this project
+                    </span>
+                  </div>
+
                   {/* Preset Prompts */}
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '18px' }}>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', alignSelf: 'center', marginRight: '4px' }}>Quick Prompts:</span>
@@ -768,9 +789,43 @@ export default function App() {
                       </div>
                     ))}
                     {chatLoading && (
-                      <div style={{ alignSelf: 'flex-start', color: 'var(--text-dim)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Sparkles size={16} className="animate-spin" />
-                        <span>Consulting Project Brain (Git + Jira + SonarQube)...</span>
+                      <div className="futuristic-ai-loader" style={{ alignSelf: 'flex-start' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                          <div className="neural-orb-container">
+                            <div className="neural-ring-outer" />
+                            <div className="neural-ring-inner" />
+                            <div className="neural-core" />
+                          </div>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.06em', color: '#38bdf8' }}>
+                                COGNITIVE CORTEX PROCESSING
+                              </span>
+                              <span className="nav-item-badge" style={{ color: '#818cf8', borderColor: 'rgba(129, 140, 248, 0.4)', fontSize: '0.68rem', padding: '1px 6px' }}>
+                                GEMINI AI
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                              Synthesizing live Digital Twin: <strong style={{ color: '#cbd5e1' }}>{selectedRepo || 'Repository'}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Animated pipeline stages */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div className="neural-pipeline-step">
+                            <span className="step-indicator-dot" />
+                            <span>1. Inspecting Git branch diffs, SonarQube gates & Jira links...</span>
+                          </div>
+                          <div className="neural-pipeline-step" style={{ opacity: 0.85 }}>
+                            <span className="step-indicator-dot" style={{ background: '#a78bfa', boxShadow: '0 0 8px #a78bfa' }} />
+                            <span>2. Calculating deterministic blast-radius & regression risk...</span>
+                          </div>
+                          <div className="neural-pipeline-step" style={{ opacity: 0.7 }}>
+                            <span className="step-indicator-dot" style={{ background: '#34d399', boxShadow: '0 0 8px #34d399' }} />
+                            <span>3. Generating grounded intelligence report with actionable advice...</span>
+                          </div>
+                        </div>
                       </div>
                     )}
                     <div ref={chatEndRef} />
